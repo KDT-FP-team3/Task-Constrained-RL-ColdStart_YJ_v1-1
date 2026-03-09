@@ -12,19 +12,17 @@ class SP500Environment:
         self.benchmark = "SPY"
         self.all_symbols = self.tickers + [self.benchmark]
         
-        self.data = self._download_data()
+        self.data, self.tickers = self._download_data()
         self.vocab_size = len(self.tickers)
 
     @st.cache_data(ttl=3600)
     def _download_data(_self):
-        # 벤치마크를 포함하여 데이터 다운로드
-        # 6mo(6개월)에서 5y(5년, 약 1260 거래일)로 기간 대폭 확장
+        # 벤치마크를 포함하여 데이터 다운로드 (5년, 약 1260 거래일)
         data = yf.download(_self.all_symbols, period="5y", interval="1d")['Close']
         data = data.ffill().bfill().dropna(axis=1)
-        
-        # 에이전트가 선택할 수 있는 종목풀(tickers)에서 SPY는 제외
-        _self.tickers = [t for t in data.columns if t != _self.benchmark]
-        return data
+        # _self를 직접 변형하지 않고 tickers를 반환값으로 전달 (mutation 경고 방지)
+        tickers = [t for t in data.columns if t != _self.benchmark]
+        return data, tickers
 
 class StaticConstraintEngine:
     def __init__(self, env, current_step):

@@ -1,10 +1,12 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import time
 import plotly.graph_objects as go
 import plotly.express as px
 from agent import SP500Environment, RecommendationAgent
+
+# st.set_page_config은 반드시 첫 번째 Streamlit 명령이어야 함
+st.set_page_config(page_title="Test-Constrained-RL", layout="wide")
 
 # == [UI 개선] CSS: 지표 카드 및 테이블 가독성 강화 ==
 st.markdown("""
@@ -16,8 +18,6 @@ div[data-testid="stMetricValue"] { font-weight: 900 !important; font-size: 2.2re
 thead tr th { font-size: 18px !important; color: black !important; font-weight: 900 !important; }
 </style>
 """, unsafe_allow_html=True)
-
-st.set_page_config(page_title="Test-Constrained-RL", layout="wide")
 st.markdown("## Test-Constrained-RL-ColdStart: S&P 500 Performance")
 
 # == 🛠 사이드바: 테스트 및 강화학습 파라미터 제어 ==
@@ -128,10 +128,20 @@ if len(st.session_state.trial_history) > 0:
         
         # == [수정] 수치 라벨 박스 "바깥쪽" 배치 (xshift 강화) ==
         # xshift를 대폭 늘려 박스 테두리와의 겹침을 완벽히 차단
-        fig_box.add_annotation(x='<b>Vanilla RL</b>', y=avg_v, text=f"<b>{avg_v:.2f}%</b>", showarrow=False, xshift=-125, font=dict(color='red', size=14, family="Arial Black"))
-        fig_box.add_annotation(x='<b>Vanilla RL</b>', y=med_v, text=f"<b>{med_v:.2f}%</b>", showarrow=False, xshift=125, font=dict(color='red', size=14, family="Arial Black"))
-        fig_box.add_annotation(x='<b>STATIC RL (Ours)</b>', y=med_s, text=f"<b>{med_s:.2f}%</b>", showarrow=False, xshift=-125, font=dict(color='blue', size=14, family="Arial Black"))
-        fig_box.add_annotation(x='<b>STATIC RL (Ours)</b>', y=avg_s, text=f"<b>{avg_s:.2f}%</b>", showarrow=False, xshift=125, font=dict(color='blue', size=14, family="Arial Black"))
+        # Vanilla: Mean/Median 모두 박스 좌측 (xshift 음수), yshift로 수직 겹침 방지
+        fig_box.add_annotation(x='<b>Vanilla RL</b>', y=avg_v, text=f"<b>Mean: {avg_v:.2f}%</b>",
+                               showarrow=False, xshift=-125, yshift=8, xanchor='right',
+                               font=dict(color='red', size=13, family="Arial Black"))
+        fig_box.add_annotation(x='<b>Vanilla RL</b>', y=med_v, text=f"<b>Median: {med_v:.2f}%</b>",
+                               showarrow=False, xshift=-125, yshift=-8, xanchor='right',
+                               font=dict(color='red', size=13, family="Arial Black"))
+        # STATIC: Mean/Median 모두 박스 우측 (xshift 양수), yshift로 수직 겹침 방지
+        fig_box.add_annotation(x='<b>STATIC RL (Ours)</b>', y=med_s, text=f"<b>Median: {med_s:.2f}%</b>",
+                               showarrow=False, xshift=125, yshift=8, xanchor='left',
+                               font=dict(color='blue', size=13, family="Arial Black"))
+        fig_box.add_annotation(x='<b>STATIC RL (Ours)</b>', y=avg_s, text=f"<b>Mean: {avg_s:.2f}%</b>",
+                               showarrow=False, xshift=125, yshift=-8, xanchor='left',
+                               font=dict(color='blue', size=13, family="Arial Black"))
 
         # == [수정] S&P 500 중앙 배치 (에러 해결 및 가독성) ==
         fig_box.add_hline(y=avg_spy, line_width=2.5, line_dash="dot", line_color="green")
