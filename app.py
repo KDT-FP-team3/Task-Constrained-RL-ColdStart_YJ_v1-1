@@ -113,59 +113,69 @@ if st.button("Run Evaluation"):
             fig_bar.update_layout(title=dict(font=dict(size=22)), xaxis=dict(tickfont=dict(size=11), tickangle=-45), yaxis=dict(tickfont=dict(size=14)), plot_bgcolor='white', height=350)
             st.plotly_chart(fig_bar, use_container_width=True)
 
-# == 2. 하단: 통계 분석 박스 플롯 (망가진 레이아웃 완벽 복구) ==
+# == 하단: 통계 분석 박스 플롯 (형태 복원 및 밀착 최적화) ==
 if len(st.session_state.trial_history) > 0:
     st.markdown("---")
     st.markdown("### Trial History: Statistical Superiority Analysis")
     history_df = pd.DataFrame(st.session_state.trial_history)
     
-    # 통계 계산
     avg_static = history_df['STATIC Final (%)'].mean(); median_static = history_df['STATIC Final (%)'].median()
     avg_vanilla = history_df['Vanilla Final (%)'].mean(); median_vanilla = history_df['Vanilla Final (%)'].median()
     avg_spy = history_df['SPY Final (%)'].mean()
-    
-    # Alpha 요약 텍스트
-    st.success(f"시장 평균({avg_spy:.2f}%) 대비 **Alpha 성과**: STATIC **{avg_static - avg_spy:.2f}%p** | Vanilla **{avg_vanilla - avg_spy:.2f}%p**")
 
     col_box, col_hist_table = st.columns([2, 1])
     with col_box:
         fig_box = go.Figure()
         
-        # == [복구 포인트 1] 두 막대기 중앙 밀착 및 너비 슬림화 ==
-        # x축을 Performance Comparison으로 통일하고, boxmode='group', boxgroupgap=0을 적용하여 완전히 붙임
-        fig_box.add_trace(go.Box(x=["Performance Comparison"], y=history_df['Vanilla Final (%)'], name='<b>Vanilla RL</b>', line=dict(color='red', width=1.5), fillcolor='rgba(0,0,0,0)', boxmean=True, width=0.35))
-        fig_box.add_trace(go.Box(x=["Performance Comparison"], y=history_df['STATIC Final (%)'], name='<b>STATIC RL (Ours)</b>', line=dict(color='blue', width=1.5), fillcolor='rgba(0,0,0,0)', boxmean=True, width=0.35))
+        # [복원 포인트 1] 박스 테두리 가시성 강화 및 밀착
+        # 테두리 두께를 늘리고(width=3), 투명도를 미세하게 조정하여 막대기 형태를 명확히 복원합니다.
+        fig_box.add_trace(go.Box(
+            y=history_df['Vanilla Final (%)'], name='<b>Vanilla RL</b>', 
+            line=dict(color='red', width=3), # 테두리 두께 강화
+            fillcolor='rgba(255, 0, 0, 0.05)', # 아주 살짝 색을 채워 박스 형태 유지
+            boxmean=True, width=0.4, offsetgroup='1'
+        ))
+        fig_box.add_trace(go.Box(
+            y=history_df['STATIC Final (%)'], name='<b>STATIC RL (Ours)</b>', 
+            line=dict(color='blue', width=3), # 테두리 두께 강화
+            fillcolor='rgba(0, 0, 255, 0.05)', # 아주 살짝 색을 채워 박스 형태 유지
+            boxmean=True, width=0.4, offsetgroup='2'
+        ))
         
-        # == [복구 포인트 2] 안내 라벨창 (우측 상단, 타이틀과 분리) ==
-        # xref='paper', x=1.0으로 우측 끝에 배치하고 줄바꿈 적용. 겹침 절대 방지
-        fig_box.add_annotation(xref="paper", yref="paper", x=1.0, y=1.12, text="<b>[Box Line Guide]</b><br>점선(- - -): Mean<br>실선(──): Median", showarrow=False, font=dict(size=12, color="black"), bgcolor="rgba(255,255,255,0.9)", bordercolor="black", borderwidth=1, align="center")
+        # [복원 포인트 2] 수치 라벨 위치 재조정 (겹침 방지)
+        # 박스 외부 좌우로 수치를 배치합니다.
+        # Vanilla (좌측)
+        fig_box.add_annotation(x='<b>Vanilla RL</b>', y=avg_vanilla, text=f"<b>{avg_vanilla:.2f}%</b>", showarrow=False, xshift=-85, font=dict(color='red', size=14))
+        fig_box.add_annotation(x='<b>Vanilla RL</b>', y=median_vanilla, text=f"<b>{median_vanilla:.2f}%</b>", showarrow=False, xshift=85, font=dict(color='red', size=14))
+        # STATIC (우측)
+        fig_box.add_annotation(x='<b>STATIC RL (Ours)</b>', y=avg_static, text=f"<b>{avg_static:.2f}%</b>", showarrow=False, xshift=-85, font=dict(color='blue', size=14))
+        fig_box.add_annotation(x='<b>STATIC RL (Ours)</b>', y=median_static, text=f"<b>{median_static:.2f}%</b>", showarrow=False, xshift=85, font=dict(color='blue', size=14))
+
+        # [복원 포인트 3] 가이드 및 S&P 500 라벨 배치
+        # 안내창을 우측 상단으로, S&P 500 수치를 좌측 끝으로 분리했습니다.
+        fig_box.add_annotation(
+            xref="paper", yref="paper", x=1.0, y=1.1, 
+            text="<b>[Box Line Guide]</b><br>점선(- - -): Mean | 실선(──): Median", 
+            showarrow=False, font=dict(size=12), bgcolor="rgba(255,255,255,0.9)", bordercolor="black", borderwidth=1
+        )
         
-        # == [복구 포인트 3] 수치 라벨 날개형 배치 및 폰트 축소 (0% 표시) ==
-        # 박스 외부 좌우로 대칭 배치하여 겹침 방지. 수치(Mean, Median)의 `%`값만 크게 표시
-        # Vanilla (좌측 박스) - Mean(점선): -120, Median(실선): -60
-        fig_box.add_annotation(x="Performance Comparison", y=avg_vanilla, text=f"<b>{avg_vanilla:.2f}%</b>", showarrow=False, xshift=-120, font=dict(color='red', size=14))
-        fig_box.add_annotation(x="Performance Comparison", y=median_vanilla, text=f"<b>{median_vanilla:.2f}%</b>", showarrow=False, xshift=-60, font=dict(color='red', size=14))
-        # STATIC (우측 박스) - Median(실선): 60, Mean(점선): 120
-        fig_box.add_annotation(x="Performance Comparison", y=median_static, text=f"<b>{median_static:.2f}%</b>", showarrow=False, xshift=60, font=dict(color='blue', size=14))
-        fig_box.add_annotation(x="Performance Comparison", y=avg_static, text=f"<b>{avg_static:.2f}%</b>", showarrow=False, xshift=120, font=dict(color='blue', size=14))
+        fig_box.add_hline(
+            y=avg_spy, line_width=2, line_dash="dot", line_color="green", 
+            annotation_text=f"<b>S&P 500<br>{avg_spy:.2f}%</b>", 
+            annotation_position="top left", annotation_font=dict(color="green", size=14), annotation_x=-0.05
+        )
 
-        # == [복구 포인트 4] S&P 500 라벨 (그래프 밖으로 충분히 이동) ==
-        # x=-0.08로 그래프 종이 좌측 밖으로 완전히 빼내어 Vanilla 박스와 겹침 방지
-        fig_box.add_hline(y=avg_spy, line_width=1.5, line_dash="dot", line_color="green", annotation_text=f"<b>S&P 500<br>{avg_spy:.2f}%</b>", annotation_position="top left", annotation_font=dict(color="green", size=14), annotation_x=-0.08)
-
-        # == [복구 포인트 5] 세로축 및 마진 복구 ==
         fig_box.update_layout(
             title=dict(text="<b>Return Distribution across Trials</b>", font=dict(size=26)),
             yaxis=dict(title="<b>Final Cumulative Return (%)</b>", tickfont=dict(size=14)),
-            xaxis=dict(tickfont=dict(size=16), showticklabels=True),
-            boxmode='group', boxgroupgap=0, # 막대기 사이 간격을 완전히 붙임
-            plot_bgcolor='white', height=500, margin=dict(t=120, b=60, l=80, r=40)
+            xaxis=dict(tickfont=dict(size=16)),
+            boxmode='group', boxgroupgap=0.05, # 막대기 사이를 아주 가깝게 밀착
+            plot_bgcolor='white', height=500, margin=dict(t=100, b=60, l=100, r=40)
         )
         fig_box.add_hline(y=0, line_width=2, line_color="black")
         st.plotly_chart(fig_box, use_container_width=True)
         
     with col_hist_table:
-        # 소수점 2째자리까지만 고정
         styled_hist = history_df.set_index("Trial").style.map(style_dataframe).format("{:.2f}")
         st.dataframe(styled_hist, height=500, use_container_width=True)
     
