@@ -1,0 +1,40 @@
+# == [Security !!] ==
+# API 키와 민감한 설정 정보가 포함된 파일은 반드시 제외해야 합니다.
+.env
+.env.local
+.env.*.local
+
+# == [Python Artifacts] ==
+# 파이썬 실행 시 생성되는 캐시 및 컴파일 파일들입니다.
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# == [Data & Models] ==
+# 금융 API로 내려받은 원본 데이터셋과 모델 결과물입니다.
+# STATIC 알고리즘에서 생성되는 Sparse Matrix(CSR) 등 대용량 바이너리 파일 포함 [cite: 34, 236]
+*.csv
+*.json
+*.npy
+*.pth
+*.pkl
+*.h5
+
+# == [Streamlit & IDE] ==
+# 로컬 개발 환경 및 웹 대시보드 설정 파일입니다.
+.streamlit/
+.vscode/
+.idea/
+.DS_Store
+
+# == [Log Files] ==
+# 에이전트 학습 과정에서 발생하는 로그들입니다.
+*.log
+logs/
