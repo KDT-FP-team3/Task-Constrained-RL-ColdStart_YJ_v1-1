@@ -6,20 +6,17 @@ import plotly.graph_objects as go
 import plotly.express as px
 from agent import SP500Environment, RecommendationAgent
 
-# == [UI 개선] CSS: 전역 텍스트 확대 제거 및 특정 요소 핀포인트 스타일링 ==
-# 이 CSS는 그래프 외부의 지표 카드(Metric)와 테이블 헤더의 가독성만 개선합니다.
+# == [UI 개선] CSS: 메트릭/테이블 헤더/텍스트 스타일 일괄 적용 ==
 st.markdown("""
 <style>
-/* 1. 상단 지표 카드(Metric) 라벨 색상 및 크기 강제 지정 */
-div[data-testid="column"]:nth-of-type(1) [data-testid="stMetricLabel"] * { color: red !important; font-weight: 900 !important; font-size: 1.2rem !important; }
-div[data-testid="column"]:nth-of-type(2) [data-testid="stMetricLabel"] * { color: blue !important; font-weight: 900 !important; font-size: 1.2rem !important; }
-div[data-testid="column"]:nth-of-type(3) [data-testid="stMetricLabel"] * { color: green !important; font-weight: 900 !important; font-size: 1.2rem !important; }
+/* 지표 라벨 색상 및 폰트 크기 강제 지정 */
+div[data-testid="column"]:nth-of-type(1) [data-testid="stMetricLabel"] * { color: red !important; font-weight: 900 !important; font-size: 1.6rem !important; }
+div[data-testid="column"]:nth-of-type(2) [data-testid="stMetricLabel"] * { color: blue !important; font-weight: 900 !important; font-size: 1.6rem !important; }
+div[data-testid="column"]:nth-of-type(3) [data-testid="stMetricLabel"] * { color: green !important; font-weight: 900 !important; font-size: 1.6rem !important; }
+div[data-testid="stMetricValue"] { font-weight: 900 !important; font-size: 2.2rem !important; }
 
-/* 2. 지표 결과 수치 폰트 크기 확대 */
-div[data-testid="stMetricValue"] { font-weight: 900 !important; font-size: 2.0rem !important; }
-
-/* 3. 테이블 헤더 스타일 조정 (검정색, 굵게) */
-thead tr th { font-size: 18px !important; color: black !important; font-weight: 900 !important; }
+/* 테이블 헤더 스타일 조정 (검정색, 굵게, 크게) */
+thead tr th { font-size: 20px !important; color: black !important; font-weight: 900 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -39,22 +36,20 @@ max_episodes = len(env.data) - 20 - 1 if len(env.data) > 20 else 100
 episodes = st.sidebar.slider("Episodes (Trading Days)", 10, max_episodes, min(100, max_episodes))
 speed = st.sidebar.slider("Frame Speed (sec)", 0.0, 0.5, 0.0)
 
-# == 1. 메인 시뮬레이션 차트 (레이아웃 복구) ==
+# == 메인 시뮬레이션 차트 ==
 fig = go.Figure()
 fig.add_trace(go.Scatter(x=[0], y=[0], mode='lines+markers', name='<b>Vanilla RL (Unconstrained)</b>', line=dict(color='red', width=2), marker=dict(symbol='circle-open', size=6, line_width=1.5)))
 fig.add_trace(go.Scatter(x=[0], y=[0], mode='lines+markers', name='<b>RL with STATIC (Ours)</b>', line=dict(color='blue', width=2), marker=dict(symbol='square-open', size=6, line_width=1.5)))
 fig.add_trace(go.Scatter(x=[0], y=[0], mode='lines+markers', name='<b>S&P 500 Index (SPY)</b>', line=dict(color='green', width=2, dash='dot'), marker=dict(symbol='diamond-open', size=6, line_width=1.5)))
 
 fig.update_layout(
-    title=dict(text="<b>Cumulative Return Comparison (S&P 500)</b>", font=dict(size=28, color='black')),
-    # 폰트 사이즈를 Plotly 표준(Title 16, Tick 14)으로 되돌려 겹침 방지
-    xaxis=dict(title="<b>Trading Days</b>", titlefont=dict(size=18), tickfont=dict(size=14), showgrid=True),
-    yaxis=dict(title="<b>Total Cumulative Return (%)</b>", titlefont=dict(size=18), tickfont=dict(size=14), showgrid=True),
-    # 범례 위치와 마진 조정 (Title과 겹침 방지)
-    legend=dict(font=dict(size=16), x=0.01, y=0.98, borderwidth=1, bgcolor='rgba(255,255,255,0.8)'),
-    plot_bgcolor='white', height=550, margin=dict(t=100, b=80, l=80, r=40)
+    title=dict(text="<b>Cumulative Return Comparison (S&P 500)</b>", font=dict(size=32, color='black', family="Arial Black")),
+    xaxis=dict(title="<b>Trading Days</b>", titlefont=dict(size=26, color='black', family="Arial Black"), tickfont=dict(size=20, color='black', family="Arial Black"), showgrid=True, gridcolor='lightgray'),
+    yaxis=dict(title="<b>Total Cumulative Return (%)</b>", titlefont=dict(size=26, color='black', family="Arial Black"), tickfont=dict(size=20, color='black', family="Arial Black"), showgrid=True, gridcolor='lightgray'),
+    legend=dict(font=dict(size=24, color='black', family="Arial Black"), x=0.01, y=0.99, borderwidth=2, bgcolor='rgba(0,0,0,0)'),
+    plot_bgcolor='white', height=600, margin=dict(t=80, b=80, l=80, r=40)
 )
-fig.add_hline(y=0, line_width=2, line_color="black")
+fig.add_hline(y=0, line_width=2, line_color="black", opacity=1.0)
 
 chart_view = st.empty()
 chart_view.plotly_chart(fig, use_container_width=True)
@@ -65,7 +60,6 @@ m_u = col1.empty(); m_s = col2.empty(); m_b = col3.empty()
 st.markdown("---")
 analysis_view = st.empty()
 
-# 테이블 스타일링 함수
 def style_dataframe(val):
     if isinstance(val, (int, float)):
         color = 'red' if val < 0 else 'black'
@@ -77,7 +71,9 @@ if st.button("Run Evaluation"):
     log_data = []
 
     for i in range(20, 20 + episodes):
-        ticker_u, _, r_u = agent_raw.select_action(current_step=i); ticker_s, _, r_s = agent_static.select_action(current_step=i)
+        ticker_u, _, r_u = agent_raw.select_action(current_step=i)
+        ticker_s, _, r_s = agent_static.select_action(current_step=i)
+        
         if 'SPY' in env.data.columns:
             spy_curr = float(env.data['SPY'].iloc[i]); spy_next = float(env.data['SPY'].iloc[i+1])
             r_b = ((spy_next - spy_curr) / spy_curr) * 100 if spy_curr > 0 else 0.0
@@ -85,6 +81,7 @@ if st.button("Run Evaluation"):
             
         h_u.append(h_u[-1] + r_u); h_s.append(h_s[-1] + r_s); h_b.append(h_b[-1] + r_b)
         current_day = i - 19; steps.append(current_day) 
+        
         log_data.append({"Day": current_day, "Vanilla Pick": ticker_u, "Vanilla Return(%)": r_u, "STATIC Pick (Ours)": ticker_s, "STATIC Return(%)": r_s})
         
         fig.data[0].x = steps; fig.data[0].y = h_u
@@ -110,7 +107,7 @@ if st.button("Run Evaluation"):
             dist_counts = df_log['STATIC Pick (Ours)'].value_counts().reset_index()
             dist_counts.columns = ['Ticker', 'Buy Count']
             fig_bar = px.bar(dist_counts, x='Ticker', y='Buy Count', title="<b>Frequency of Safe-Asset Selection</b>", color='Buy Count', color_continuous_scale='Blues')
-            fig_bar.update_layout(title=dict(font=dict(size=22)), xaxis=dict(tickfont=dict(size=11), tickangle=-45), yaxis=dict(tickfont=dict(size=14)), plot_bgcolor='white', height=350)
+            fig_bar.update_layout(title=dict(font=dict(size=24, color='black', family="Arial Black")), xaxis=dict(tickfont=dict(size=11), tickangle=-45, dtick=1), yaxis=dict(tickfont=dict(size=16)), plot_bgcolor='white', height=350)
             st.plotly_chart(fig_bar, use_container_width=True)
 
 # == 하단: 통계 분석 박스 플롯 (형태 복원 및 밀착 최적화) ==
@@ -127,49 +124,52 @@ if len(st.session_state.trial_history) > 0:
     with col_box:
         fig_box = go.Figure()
         
-        # [복원 포인트 1] 박스 테두리 가시성 강화 및 밀착
-        # 테두리 두께를 늘리고(width=3), 투명도를 미세하게 조정하여 막대기 형태를 명확히 복원합니다.
+        # == [수정됨] 박스 형태 복원 및 슬림화 ==
+        # width=0.35로 슬림하게 조정하여 날개형 라벨과 어울리게 합니다. line_width=3으로 테두리 강화.
         fig_box.add_trace(go.Box(
             y=history_df['Vanilla Final (%)'], name='<b>Vanilla RL</b>', 
-            line=dict(color='red', width=3), # 테두리 두께 강화
-            fillcolor='rgba(255, 0, 0, 0.05)', # 아주 살짝 색을 채워 박스 형태 유지
-            boxmean=True, width=0.4, offsetgroup='1'
+            line=dict(color='red', width=3), fillcolor='rgba(255, 0, 0, 0.05)', 
+            boxmean=True, width=0.35, offsetgroup='1'
         ))
         fig_box.add_trace(go.Box(
             y=history_df['STATIC Final (%)'], name='<b>STATIC RL (Ours)</b>', 
-            line=dict(color='blue', width=3), # 테두리 두께 강화
-            fillcolor='rgba(0, 0, 255, 0.05)', # 아주 살짝 색을 채워 박스 형태 유지
-            boxmean=True, width=0.4, offsetgroup='2'
+            line=dict(color='blue', width=3), fillcolor='rgba(0, 0, 255, 0.05)', 
+            boxmean=True, width=0.35, offsetgroup='2'
         ))
         
-        # [복원 포인트 2] 수치 라벨 위치 재조정 (겹침 방지)
-        # 박스 외부 좌우로 수치를 배치합니다.
+        # == [수정됨] 수치 라벨 박스 "바깥쪽" 날개형 배치 ==
+        # xshift=100으로 충분히 키워 박스 외부 좌우로 숫자만 굵게 배치합니다. 겹침 문제를 완벽히 해결했습니다.
+        # Mean(점선)-왼쪽, Median(실선)-오른쪽으로 날개형 배치합니다.
         # Vanilla (좌측)
-        fig_box.add_annotation(x='<b>Vanilla RL</b>', y=avg_vanilla, text=f"<b>{avg_vanilla:.2f}%</b>", showarrow=False, xshift=-85, font=dict(color='red', size=14))
-        fig_box.add_annotation(x='<b>Vanilla RL</b>', y=median_vanilla, text=f"<b>{median_vanilla:.2f}%</b>", showarrow=False, xshift=85, font=dict(color='red', size=14))
+        fig_box.add_annotation(x='<b>Vanilla RL</b>', y=avg_vanilla, text=f"<b>{avg_vanilla:.2f}%</b>", showarrow=False, xshift=-100, font=dict(color='red', size=14))
+        fig_box.add_annotation(x='<b>Vanilla RL</b>', y=median_vanilla, text=f"<b>{median_vanilla:.2f}%</b>", showarrow=False, xshift=100, font=dict(color='red', size=14))
         # STATIC (우측)
-        fig_box.add_annotation(x='<b>STATIC RL (Ours)</b>', y=avg_static, text=f"<b>{avg_static:.2f}%</b>", showarrow=False, xshift=-85, font=dict(color='blue', size=14))
-        fig_box.add_annotation(x='<b>STATIC RL (Ours)</b>', y=median_static, text=f"<b>{median_static:.2f}%</b>", showarrow=False, xshift=85, font=dict(color='blue', size=14))
+        # Median(실선)-왼쪽, Mean(점선)-오른쪽으로 날개형 배치합니다.
+        fig_box.add_annotation(x='<b>STATIC RL (Ours)</b>', y=median_static, text=f"<b>{median_static:.2f}%</b>", showarrow=False, xshift=-100, font=dict(color='blue', size=14))
+        fig_box.add_annotation(x='<b>STATIC RL (Ours)</b>', y=avg_static, text=f"<b>{avg_static:.2f}%</b>", showarrow=False, xshift=100, font=dict(color='blue', size=14))
 
-        # [복원 포인트 3] 가이드 및 S&P 500 라벨 배치
-        # 안내창을 우측 상단으로, S&P 500 수치를 좌측 끝으로 분리했습니다.
+        # == [수정됨] 가이드 및 S&P 500 라벨 배치 ==
+        # 안내창은 우측 상단 끝으로 이동시켜 전체적인 시각적 균형을 맞춥니다.
         fig_box.add_annotation(
             xref="paper", yref="paper", x=1.0, y=1.1, 
             text="<b>[Box Line Guide]</b><br>점선(- - -): Mean | 실선(──): Median", 
             showarrow=False, font=dict(size=12), bgcolor="rgba(255,255,255,0.9)", bordercolor="black", borderwidth=1
         )
         
+        # == [요청 반영] S&P 500 라벨 이동 ==
+        # annotation_position="top center"를 사용하여 녹색 점선 위, 두 막대기 사이의 중앙 위치로 이동시킵니다. 줄바꿈을 제거하여 가로로 한 줄로 표시합니다.
         fig_box.add_hline(
             y=avg_spy, line_width=2, line_dash="dot", line_color="green", 
-            annotation_text=f"<b>S&P 500<br>{avg_spy:.2f}%</b>", 
-            annotation_position="top left", annotation_font=dict(color="green", size=14), annotation_x=-0.05
+            annotation_text=f"<b>S&P 500 {avg_spy:.2f}%</b>", 
+            annotation_position="top center", annotation_font=dict(color="green", size=14),
+            # annotation_x는 생략하여 중앙 카테고리 위에 위치시킴
         )
 
         fig_box.update_layout(
             title=dict(text="<b>Return Distribution across Trials</b>", font=dict(size=26)),
             yaxis=dict(title="<b>Final Cumulative Return (%)</b>", tickfont=dict(size=14)),
             xaxis=dict(tickfont=dict(size=16)),
-            boxmode='group', boxgroupgap=0.05, # 막대기 사이를 아주 가깝게 밀착
+            boxmode='group', boxgroupgap=0.05, # 막대기 사이를 가깝게 밀착
             plot_bgcolor='white', height=500, margin=dict(t=100, b=60, l=100, r=40)
         )
         fig_box.add_hline(y=0, line_width=2, line_color="black")
