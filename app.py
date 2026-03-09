@@ -136,23 +136,37 @@ if len(st.session_state.trial_history) > 0:
         # == [요청 반영 2] 안내 라벨창 제거 (... 부분 제거) ==
         # 기존의 add_annotation 가이드 박스 블록을 삭제했습니다.
         
-        # Vanilla RL 라벨: 박스 좌측에 배치, xanchor='right'로 텍스트가 오른쪽 정렬
-        fig_box.add_annotation(x='<b>Vanilla RL</b>', y=avg_vanilla, text=f"<b>{avg_vanilla:.2f}%</b>",
-                               showarrow=False, xshift=-70, xanchor='right', font=dict(color='red', size=13))
-        fig_box.add_annotation(x='<b>Vanilla RL</b>', y=median_vanilla, text=f"<b>{median_vanilla:.2f}%</b>",
-                               showarrow=False, xshift=-40, xanchor='right', font=dict(color='red', size=13))
+        # Vanilla RL: Mean/Median을 하나의 박스로 합쳐 박스 좌측 바깥에 배치
+        # xshift=-110 → 박스 절반 너비(~45px)보다 충분히 크게 설정
+        fig_box.add_annotation(
+            x='<b>Vanilla RL</b>',
+            y=(avg_vanilla + median_vanilla) / 2,
+            text=f"<b>Mean: {avg_vanilla:.2f}%</b><br><b>Median: {median_vanilla:.2f}%</b>",
+            showarrow=False, xshift=-110, xanchor='right', align='right',
+            font=dict(color='red', size=12),
+            bgcolor='rgba(255,255,255,0.85)', borderpad=5
+        )
 
-        # STATIC RL 라벨: 박스 우측에 배치, xanchor='left'로 텍스트가 왼쪽 정렬
-        fig_box.add_annotation(x='<b>STATIC RL (Ours)</b>', y=median_static, text=f"<b>{median_static:.2f}%</b>",
-                               showarrow=False, xshift=40, xanchor='left', font=dict(color='blue', size=13))
-        fig_box.add_annotation(x='<b>STATIC RL (Ours)</b>', y=avg_static, text=f"<b>{avg_static:.2f}%</b>",
-                               showarrow=False, xshift=70, xanchor='left', font=dict(color='blue', size=13))
+        # STATIC RL: Mean/Median을 하나의 박스로 합쳐 박스 우측 바깥에 배치
+        fig_box.add_annotation(
+            x='<b>STATIC RL (Ours)</b>',
+            y=(avg_static + median_static) / 2,
+            text=f"<b>Median: {median_static:.2f}%</b><br><b>Mean: {avg_static:.2f}%</b>",
+            showarrow=False, xshift=110, xanchor='left', align='left',
+            font=dict(color='blue', size=12),
+            bgcolor='rgba(255,255,255,0.85)', borderpad=5
+        )
 
-        # S&P 500 기준선: 우측 상단에 배치하여 좌측 라벨과 충돌 방지
-        fig_box.add_hline(y=avg_spy, line_width=1.5, line_dash="dot", line_color="green",
-                          annotation_text=f"<b>S&P 500: {avg_spy:.2f}%</b>",
-                          annotation_position="top right",
-                          annotation_font=dict(color="green", size=13))
+        # S&P 500 기준선: 선만 그리고, 라벨은 차트 정중앙(xref='paper', x=0.5)에 별도 배치
+        fig_box.add_hline(y=avg_spy, line_width=1.5, line_dash="dot", line_color="green")
+        fig_box.add_annotation(
+            xref='paper', x=0.5,
+            yref='y', y=avg_spy,
+            text=f"<b>S&P 500: {avg_spy:.2f}%</b>",
+            showarrow=False, xanchor='center', yanchor='bottom', yshift=8,
+            font=dict(color='green', size=12),
+            bgcolor='rgba(255,255,255,0.85)', borderpad=5
+        )
 
         # == [요청 반영 3] 가로/세로축 텍스트 크기 확대 및 볼드체 적용 ==
         fig_box.update_layout(
