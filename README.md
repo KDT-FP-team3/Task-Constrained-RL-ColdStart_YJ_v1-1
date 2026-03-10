@@ -27,8 +27,7 @@ S&P 500 대표 종목을 대상으로 제약 조건 강화학습(Constrained Rei
 
 <img width="866" height="644" alt="강화학습-그림1_어두운배경" src="https://github.com/user-attachments/assets/44f24630-4c33-4a5c-a236-39882d22a876" />
 
-<!-- 다크모드 메인 대시보드 스크린샷 삽입 위치 -->
-<!-- <img alt="메인대시보드-다크모드" src="" /> -->
+---
 
 ## 2. RL과 STATIC의 연결
 
@@ -50,6 +49,35 @@ pip install streamlit pandas numpy plotly yfinance
 | pandas, numpy | 데이터 처리 및 수치 연산 |
 | plotly | 인터랙티브 그래프 시각화 |
 | yfinance | 실시간 주가 데이터 수집 |
+
+---
+
+## 4. 데이터 획득 및 웹 배포 아키텍처 (추가 내용)
+
+본 프로젝트의 실용성을 높이기 위해 외부 API 연동 및 클라우드 배포를 다음과 같이 구현했습니다.
+
+**API 키 및 환경 변수**
+
+  
+
+### Alpha Vantage API를 통한 실시간 데이터 연동
+
+`config.py`는 `EXTERNAL_API_KEY` 환경 변수를 참조하도록 구성되어 있습니다.
+
+기존 주가 데이터 수집 방식을 확장하여 [Alpha Vantage](https://www.alphavantage.co/support/#) API를 통합했습니다.
+
+이를 통해 SPY 및 S&P 500 주요 종목의 실시간 주가 정보를 안정적으로 확보했습니다. 보안을 위해 API 키는 소스 코드에 하드코딩하지 않고 `.env` 파일에 환경 변수로 저장하여 관리할 수 있으나, 현재 배포된 웹 버전(Streamlit Cloud)은 해당 키를 Streamlit Secrets에 직접 등록한 상태이므로, 로컬 실행 시에도 `.env` 파일을 별도로 생성할 필요가 없습니다. 데이터 수집에 사용되는 `yfinance`는 별도의 인증 없이 공개 주가 데이터를 수집합니다.
+
+### Streamlit Cloud를 통한 웹 무료 배포
+
+로컬 환경에서 개발된 대시보드를 [Streamlit Cloud](https://share.streamlit.io/)를 통해 웹으로 배포하였다.
+
+1. **GitHub 연동**: 작성된 소스 코드를 GitHub 리포지토리에 업로드한다.
+2. **배포 설정**: Streamlit Cloud에서 해당 리포지토리를 연결하여 실시간 웹 서비스를 가동한다.
+3. **접근성 확보**: 전문가 및 사용자가 별도의 설치 없이 URL을 통해 강화학습 에이전트의 성과를 실시간으로 모니터링할 수 있는 환경을 구축하였다.
+
+
+ 
 
 ## 4. 실행 방법
 
