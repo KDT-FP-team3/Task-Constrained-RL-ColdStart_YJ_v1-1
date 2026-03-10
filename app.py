@@ -13,10 +13,10 @@ st.set_page_config(page_title="Test-Constrained-RL", layout="wide")
 st.markdown("""
 <style>
 div[data-testid="column"]:nth-of-type(1) [data-testid="stMetricLabel"] * { color: red !important; font-weight: 900 !important; font-size: 1.4rem !important; }
-div[data-testid="column"]:nth-of-type(2) [data-testid="stMetricLabel"] * { color: blue !important; font-weight: 900 !important; font-size: 1.4rem !important; }
-div[data-testid="column"]:nth-of-type(3) [data-testid="stMetricLabel"] * { color: green !important; font-weight: 900 !important; font-size: 1.4rem !important; }
+div[data-testid="column"]:nth-of-type(2) [data-testid="stMetricLabel"] * { color: #4a90d9 !important; font-weight: 900 !important; font-size: 1.4rem !important; }
+div[data-testid="column"]:nth-of-type(3) [data-testid="stMetricLabel"] * { color: #2ea84a !important; font-weight: 900 !important; font-size: 1.4rem !important; }
 div[data-testid="stMetricValue"] { font-weight: 900 !important; font-size: 2.2rem !important; }
-thead tr th { font-size: 18px !important; color: black !important; font-weight: 900 !important; }
+thead tr th { font-size: 18px !important; color: var(--text-color) !important; font-weight: 900 !important; }
 </style>
 """, unsafe_allow_html=True)
 st.markdown("## Test-Constrained-RL-ColdStart: S&P 500 Performance")
@@ -58,10 +58,10 @@ fig_main.update_layout(
     title=dict(text="<b>Cumulative Return Comparison (S&P 500)</b>", font=dict(size=28)),
     xaxis=dict(title="<b>Trading Days</b>", titlefont=dict(size=18), showgrid=True),
     yaxis=dict(title="<b>Total Cumulative Return (%)</b>", titlefont=dict(size=18), showgrid=True),
-    legend=dict(font=dict(size=16), x=0.01, y=0.99, bgcolor='rgba(255,255,255,0.8)'),
-    plot_bgcolor='white', height=550, margin=dict(t=80, b=80, l=80, r=40)
+    legend=dict(font=dict(size=16), x=0.01, y=0.99, bgcolor='rgba(128,128,128,0.15)', bordercolor='rgba(128,128,128,0.3)', borderwidth=1),
+    plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', height=550, margin=dict(t=80, b=80, l=80, r=40)
 )
-fig_main.add_hline(y=0, line_width=2, line_color="black")
+fig_main.add_hline(y=0, line_width=2, line_color="rgba(150,150,150,0.8)")
 
 chart_view = st.empty()
 chart_view.plotly_chart(fig_main, use_container_width=True)
@@ -78,8 +78,10 @@ bar_view = col_bar.empty()
 
 def style_df(val):
     if isinstance(val, (int, float)):
-        return f'color: {"red" if val < 0 else "black"}; font-weight: bold; font-size: 16px;'
-    return 'color: black; font-weight: bold; font-size: 16px;'
+        if val < 0:
+            return 'color: red; font-weight: bold; font-size: 16px;'
+        return 'font-weight: bold; font-size: 16px;'
+    return 'font-weight: bold; font-size: 16px;'
 
 if st.button("Run Evaluation"):
     for run in range(auto_runs):
@@ -132,9 +134,9 @@ if st.button("Run Evaluation"):
         styled_df = df_log.style.map(style_df).format("{:.2f}", subset=["Vanilla Return(%)", "STATIC Return(%)"])
         tbl_view.dataframe(styled_df, height=350, use_container_width=True)
         
-        fig_bar = px.bar(df_log['STATIC Pick (Ours)'].value_counts().reset_index(), x='STATIC Pick (Ours)', y='count', 
+        fig_bar = px.bar(df_log['STATIC Pick (Ours)'].value_counts().reset_index(), x='STATIC Pick (Ours)', y='count',
                          title="<b>Safe-Asset Selection Frequency</b>", color='count', color_continuous_scale='Blues')
-        bar_view.plotly_chart(fig_bar.update_layout(plot_bgcolor='white', height=350), use_container_width=True)
+        bar_view.plotly_chart(fig_bar.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', height=350), use_container_width=True)
 
 # == 📊 하단: 통계 분석 고도화 (누적 그래프 및 박스 플롯) ==
 if len(st.session_state.trial_history) > 0:
@@ -170,9 +172,9 @@ if len(st.session_state.trial_history) > 0:
         title=dict(text="<b>Trial-by-Trial Return Progression & Stability</b>", font=dict(size=24, family="Arial Black")),
         xaxis=dict(title="<b>Trial Number</b>", tickmode='linear', dtick=1),
         yaxis=dict(title="<b>Final Return (%)</b>"),
-        plot_bgcolor='white', height=400, margin=dict(t=60, b=40, l=40, r=40)
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', height=400, margin=dict(t=60, b=40, l=40, r=40)
     )
-    fig_trend.add_hline(y=0, line_width=2, line_color="black")
+    fig_trend.add_hline(y=0, line_width=2, line_color="rgba(150,150,150,0.8)")
     st.plotly_chart(fig_trend, use_container_width=True)
 
     # == 하단 2단 레이아웃 (박스 플롯 & 통계 테이블) ==
@@ -203,22 +205,22 @@ if len(st.session_state.trial_history) > 0:
                 tickmode='array', tickvals=[1.0, 2.25], ticktext=['<b>Vanilla RL</b>', '<b>STATIC RL (Ours)</b>'],
                 tickfont=dict(size=18, family="Arial Black"), range=[0, 3.0]
             ),
-            plot_bgcolor='white', height=550, margin=dict(t=120, b=100, l=80, r=80)
+            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', height=550, margin=dict(t=120, b=100, l=80, r=80)
         )
-        fig_box.add_hline(y=0, line_width=2, line_color="black")
+        fig_box.add_hline(y=0, line_width=2, line_color="rgba(150,150,150,0.8)")
         st.plotly_chart(fig_box, use_container_width=True)
     
     with col_tbl_h:
         # 테이블 상단 요약 통계량 명시
         st.markdown(f"""
-        <div style='background-color: #f8f9fa; padding: 15px; border-radius: 10px; border: 1px solid #e0e0e0; margin-bottom: 10px;'>
-            <h4 style='margin-top:0px; color: black; font-weight: 900;'> 통계 요약 (Expected & Risk)</h4>
-            <ul style='font-size: 15px; margin-bottom: 0px;'>
-                <li><b style='color:red;'>Vanilla 평균(기대치):</b> {v_mean:.2f}% (σ={v_std:.2f}%)</li>
-                <li><b style='color:red;'>Vanilla 범위:</b> {v_min:.2f}% ~ {v_max:.2f}%</li>
-                <hr style='margin: 8px 0;'>
-                <li><b style='color:blue;'>STATIC 평균(기대치):</b> {s_mean:.2f}% (σ={s_std:.2f}%)</li>
-                <li><b style='color:blue;'>STATIC 범위:</b> {s_min:.2f}% ~ {s_max:.2f}%</li>
+        <div style='background-color: var(--secondary-background-color); padding: 15px; border-radius: 10px; border: 1px solid rgba(128,128,128,0.3); margin-bottom: 10px;'>
+            <h4 style='margin-top:0px; color: var(--text-color); font-weight: 900;'> 통계 요약 (Expected & Risk)</h4>
+            <ul style='font-size: 15px; margin-bottom: 0px; color: var(--text-color);'>
+                <li><b style='color:#e05050;'>Vanilla 평균(기대치):</b> {v_mean:.2f}% (σ={v_std:.2f}%)</li>
+                <li><b style='color:#e05050;'>Vanilla 범위:</b> {v_min:.2f}% ~ {v_max:.2f}%</li>
+                <hr style='margin: 8px 0; border-color: rgba(128,128,128,0.3);'>
+                <li><b style='color:#4a90d9;'>STATIC 평균(기대치):</b> {s_mean:.2f}% (σ={s_std:.2f}%)</li>
+                <li><b style='color:#4a90d9;'>STATIC 범위:</b> {s_min:.2f}% ~ {s_max:.2f}%</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
