@@ -72,6 +72,9 @@ pip install streamlit pandas numpy plotly yfinance
 1. **GitHub 연동**: 소스 코드를 GitHub 리포지토리에 업로드합니다.
 2. **배포 설정**: Streamlit Cloud에서 해당 리포지토리를 연결하여 실시간 웹 서비스를 가동합니다.
 3. **접근성 확보**: 전문가 및 사용자가 별도의 설치 없이 URL을 통해 강화학습 에이전트의 성과를 실시간으로 모니터링할 수 있습니다.
+4. **주의할 점**: 실행 tool인 VScode의 파이썬 버전(3.12)과 Streamlit에서의 파이썬 버전을 일치시켜야 한다.
+                  -> Streamlit 에서는 파이썬 버전의 기본값이 3.14로 되어있어서, 필요시 본인의 VScode의 파이썬 버전(3.12)으로 바꾸어야 한다.
+                  -> 여기서는 Python 3.12 버전이다. 
 
 ---
 
