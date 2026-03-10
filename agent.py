@@ -47,7 +47,7 @@ class StaticConstraintEngine:
 
 class RecommendationAgent:
     # lr, gamma, eps 인자를 추가하고 기본값을 설정합니다.
-    def __init__(self, env, use_constraints=True, lr=0.01, gamma=0.95, eps=0.1):
+    def __init__(self, env, use_constraints=True, lr=0.01, gamma=0.98, eps=0.1):
         self.env = env
         self.use_constraints = use_constraints
         

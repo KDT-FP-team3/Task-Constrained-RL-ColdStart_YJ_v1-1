@@ -31,10 +31,13 @@ speed = st.sidebar.slider("Frame Speed (sec)", 0.0, 0.5, 0.0)
 # == 실험 재현성을 위한 랜덤 시드 설정 ==
 base_seed = st.sidebar.number_input("Base Random Seed", value=2026, step=1, help="실험 재현성을 위한 기본 시드입니다. 각 Trial마다 이 값에 +1씩 더해집니다.")
 
+# == [신규 추가] 자동 반복 실행 횟수 설정 ==
+auto_runs = st.sidebar.number_input("Auto Run Count", min_value=1, value=1, step=1, help="Run Evaluation 버튼 클릭 시 자동으로 반복 실행할 횟수입니다.")
+
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🧠 RL Hyperparameters (Logic: STATIC)")
 lr = st.sidebar.slider("Learning Rate (α)", 0.001, 0.5, 0.01, step=0.001)
-gamma = st.sidebar.slider("Discount Factor (γ)", 0.50, 0.99, 0.95, step=0.01)
+gamma = st.sidebar.slider("Discount Factor (γ)", 0.50, 0.99, 0.98, step=0.01)
 eps = st.sidebar.slider("Exploration (ε)", 0.0, 1.0, 0.1, step=0.05)
 
 if 'trial_history' not in st.session_state:
@@ -73,52 +76,59 @@ def style_df(val):
     return 'color: black; font-weight: bold; font-size: 16px;'
 
 if st.button("Run Evaluation"):
-    trial_idx = len(st.session_state.trial_history)
-    current_seed = base_seed + trial_idx
-    np.random.seed(current_seed)
-    st.toast(f"Trial {trial_idx + 1} Started (Seed: {current_seed})")
+    # == [수정됨] auto_runs 설정값만큼 시뮬레이션을 반복 실행하는 루프 ==
+    for run in range(auto_runs):
+        trial_idx = len(st.session_state.trial_history)
+        current_seed = base_seed + trial_idx
+        np.random.seed(current_seed)
+        st.toast(f"Trial {trial_idx + 1} Started (Seed: {current_seed}) - Run {run + 1}/{auto_runs}")
 
-    h_u, h_s, h_b, steps = [0], [0], [0], [0]
-    log_data = []
+        h_u, h_s, h_b, steps = [0], [0], [0], [0]
+        log_data = []
 
-    for i in range(20, 20 + episodes):
-        ticker_u, _, r_u = agent_raw.select_action(current_step=i)
-        ticker_s, _, r_s = agent_static.select_action(current_step=i)
-        
-        if 'SPY' in env.data.columns:
-            sc, sn = float(env.data['SPY'].iloc[i]), float(env.data['SPY'].iloc[i+1])
-            r_b = ((sn - sc) / sc) * 100 if sc > 0 else 0.0
-        else: r_b = 0.0
+        for i in range(20, 20 + episodes):
+            ticker_u, _, r_u = agent_raw.select_action(current_step=i)
+            ticker_s, _, r_s = agent_static.select_action(current_step=i)
             
-        h_u.append(h_u[-1] + r_u); h_s.append(h_s[-1] + r_s); h_b.append(h_b[-1] + r_b)
-        current_day = i - 19; steps.append(current_day) 
-        log_data.append({"Day": current_day, "Vanilla Pick": ticker_u, "Vanilla Return(%)": r_u, "STATIC Pick (Ours)": ticker_s, "STATIC Return(%)": r_s})
-        
-        fig.data[0].x = steps; fig.data[0].y = h_u
-        fig.data[1].x = steps; fig.data[1].y = h_s
-        fig.data[2].x = steps; fig.data[2].y = h_b
-        chart_view.plotly_chart(fig, use_container_width=True)
-        
-        m_u.metric(label="Unconstrained Return", value=f"{h_u[-1]:.2f}%", delta=f"{r_u:.2f}%")
-        m_s.metric(label=f"STATIC Return - Bought: {ticker_s}", value=f"{h_s[-1]:.2f}%", delta=f"{r_s:.2f}%")
-        m_b.metric(label="S&P 500 Index (SPY)", value=f"{h_b[-1]:.2f}%", delta=f"{r_b:.2f}%")
-        time.sleep(speed)
+            if 'SPY' in env.data.columns:
+                sc, sn = float(env.data['SPY'].iloc[i]), float(env.data['SPY'].iloc[i+1])
+                r_b = ((sn - sc) / sc) * 100 if sc > 0 else 0.0
+            else: r_b = 0.0
+                
+            h_u.append(h_u[-1] + r_u); h_s.append(h_s[-1] + r_s); h_b.append(h_b[-1] + r_b)
+            current_day = i - 19; steps.append(current_day) 
+            log_data.append({"Day": current_day, "Vanilla Pick": ticker_u, "Vanilla Return(%)": r_u, "STATIC Pick (Ours)": ticker_s, "STATIC Return(%)": r_s})
+            
+            fig.data[0].x = steps; fig.data[0].y = h_u
+            fig.data[1].x = steps; fig.data[1].y = h_s
+            fig.data[2].x = steps; fig.data[2].y = h_b
+            chart_view.plotly_chart(fig, use_container_width=True)
+            
+            m_u.metric(label="Unconstrained Return", value=f"{h_u[-1]:.2f}%", delta=f"{r_u:.2f}%")
+            m_s.metric(label=f"STATIC Return - Bought: {ticker_s}", value=f"{h_s[-1]:.2f}%", delta=f"{r_s:.2f}%")
+            m_b.metric(label="S&P 500 Index (SPY)", value=f"{h_b[-1]:.2f}%", delta=f"{r_b:.2f}%")
+            
+            # Frame Speed가 0보다 클 때만 지연시킴 (다중 실행 시 빠른 속도 보장)
+            if speed > 0:
+                time.sleep(speed)
 
-    st.session_state.trial_history.append({
-        "Trial": trial_idx + 1, 
-        "Seed": current_seed, 
-        "Vanilla Final (%)": h_u[-1], 
-        "STATIC Final (%)": h_s[-1], 
-        "SPY Final (%)": h_b[-1]
-    })
+        # 현재 회차 결과를 세션 히스토리에 저장
+        st.session_state.trial_history.append({
+            "Trial": trial_idx + 1, 
+            "Seed": current_seed, 
+            "Vanilla Final (%)": h_u[-1], 
+            "STATIC Final (%)": h_s[-1], 
+            "SPY Final (%)": h_b[-1]
+        })
 
-    with analysis_view.container():
-        st.markdown("#### Agent Decision Analysis")
-        col_tbl, col_bar = st.columns([1.2, 1])
-        with col_tbl:
-            st.dataframe(pd.DataFrame(log_data).set_index("Day").style.map(style_df).format("{:.2f}", subset=["Vanilla Return(%)", "STATIC Return(%)"]), height=350, use_container_width=True)
-        with col_bar:
-            st.plotly_chart(px.bar(pd.DataFrame(log_data)['STATIC Pick (Ours)'].value_counts().reset_index(), x='STATIC Pick (Ours)', y='count', title="<b>Safe-Asset Selection Frequency</b>", color='count', color_continuous_scale='Blues').update_layout(plot_bgcolor='white', height=350), use_container_width=True)
+        # 중간중간 Agent Decision Analysis 테이블 갱신
+        with analysis_view.container():
+            st.markdown("#### Agent Decision Analysis")
+            col_tbl, col_bar = st.columns([1.2, 1])
+            with col_tbl:
+                st.dataframe(pd.DataFrame(log_data).set_index("Day").style.map(style_df).format("{:.2f}", subset=["Vanilla Return(%)", "STATIC Return(%)"]), height=350, use_container_width=True)
+            with col_bar:
+                st.plotly_chart(px.bar(pd.DataFrame(log_data)['STATIC Pick (Ours)'].value_counts().reset_index(), x='STATIC Pick (Ours)', y='count', title="<b>Safe-Asset Selection Frequency</b>", color='count', color_continuous_scale='Blues').update_layout(plot_bgcolor='white', height=350), use_container_width=True)
 
 # == 📊 하단: 통계 분석 고도화 (누적 그래프 및 박스 플롯) ==
 if len(st.session_state.trial_history) > 0:
@@ -126,7 +136,7 @@ if len(st.session_state.trial_history) > 0:
     st.markdown("### Trial History: Statistical Analysis (Alpha Performance)")
     df_h = pd.DataFrame(st.session_state.trial_history)
     
-    # 통계량 계산 (표준편차는 데이터가 2개 이상일 때만 계산)
+    # 통계량 계산
     v_mean, v_max, v_min = df_h['Vanilla Final (%)'].mean(), df_h['Vanilla Final (%)'].max(), df_h['Vanilla Final (%)'].min()
     s_mean, s_max, s_min = df_h['STATIC Final (%)'].mean(), df_h['STATIC Final (%)'].max(), df_h['STATIC Final (%)'].min()
     v_std = df_h['Vanilla Final (%)'].std() if len(df_h) > 1 else 0.0
@@ -138,11 +148,9 @@ if len(st.session_state.trial_history) > 0:
     # == 회차별 누적 성과 추이 그래프 ==
     fig_trend = go.Figure()
     
-    # 산점도 및 꺾은선 (Trial 추이)
     fig_trend.add_trace(go.Scatter(x=df_h['Trial'], y=df_h['Vanilla Final (%)'], mode='lines+markers', name='<b>Vanilla Return</b>', line=dict(color='red', width=2), marker=dict(size=8)))
     fig_trend.add_trace(go.Scatter(x=df_h['Trial'], y=df_h['STATIC Final (%)'], mode='lines+markers', name='<b>STATIC Return (Ours)</b>', line=dict(color='blue', width=2), marker=dict(size=8)))
     
-    # 통계적 기준선 (H-lines)
     # Vanilla 선들
     fig_trend.add_hline(y=v_mean, line_dash="solid", line_color="red", opacity=0.4, annotation_text=f"Vanilla Mean", annotation_position="top right")
     fig_trend.add_hline(y=v_max, line_dash="dot", line_color="red", opacity=0.3, annotation_text=f"Vanilla Max", annotation_position="top right")
@@ -195,7 +203,6 @@ if len(st.session_state.trial_history) > 0:
         st.plotly_chart(fig_box, use_container_width=True)
     
     with col_tbl_h:
-        # 테이블 상단 요약 통계량 명시
         st.markdown(f"""
         <div style='background-color: #f8f9fa; padding: 15px; border-radius: 10px; border: 1px solid #e0e0e0; margin-bottom: 10px;'>
             <h4 style='margin-top:0px; color: black; font-weight: 900;'>📊 통계 요약 (Expected & Risk)</h4>
@@ -210,3 +217,5 @@ if len(st.session_state.trial_history) > 0:
         """, unsafe_allow_html=True)
         
         st.dataframe(df_h.set_index("Trial").style.map(style_df).format({"Vanilla Final (%)": "{:.2f}", "STATIC Final (%)": "{:.2f}", "SPY Final (%)": "{:.2f}", "Seed": "{:.0f}"}), height=320, use_container_width=True)
+
+# 차트 해석 가이드 삭제 완료
