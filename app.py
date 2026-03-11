@@ -4,6 +4,7 @@ import numpy as np
 import time
 import plotly.graph_objects as go
 import plotly.express as px
+from plotly.subplots import make_subplots
 from agent import SP500Environment, RecommendationAgent
 
 # st.set_page_config은 반드시 첫 번째 Streamlit 명령이어야 함
@@ -36,11 +37,16 @@ base_seed = st.sidebar.number_input("Base Random Seed", value=2026, step=1, help
 auto_runs = st.sidebar.number_input("Auto Run Count", min_value=1, value=1, step=1, help="Run Evaluation 버튼 클릭 시 자동으로 반복 실행할 횟수입니다.")
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("### RL Hyperparameters (Logic: STATIC)")
+st.sidebar.markdown("### RL Hyperparameters (Q-Learning)")
 lr = st.sidebar.slider("Learning Rate (α)", 0.001, 0.5, 0.01, step=0.001)
 # [수정됨] Gamma 기본값 0.98 반영
 gamma = st.sidebar.slider("Discount Factor (γ)", 0.50, 0.99, 0.98, step=0.01)
 eps = st.sidebar.slider("Exploration (ε)", 0.0, 1.0, 0.1, step=0.05)
+
+# == 사전 학습 에피소드 설정 ==
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Pre-Training")
+pretrain_episodes = st.sidebar.slider("Pre-Train Episodes", 0, 5, 2, step=1, help="본 실험 전 Q-테이블 사전 학습 횟수. 과거 데이터 전체를 반복 학습하여 초기 정책을 구축합니다.")
 
 if 'trial_history' not in st.session_state:
     st.session_state.trial_history = []
@@ -69,12 +75,26 @@ chart_view.plotly_chart(fig_main, use_container_width=True)
 col1, col2, col3 = st.columns(3)
 m_u, m_s, m_b = col1.empty(), col2.empty(), col3.empty()
 
+# == 학습 지표 실시간 표시 영역 ==
+st.markdown("---")
+st.markdown("### 📊 Learning Progress")
+col_lr1, col_lr2, col_lr3, col_lr4 = st.columns(4)
+m_winrate_u = col_lr1.empty()
+m_winrate_s = col_lr2.empty()
+m_avgq_u = col_lr3.empty()
+m_avgq_s = col_lr4.empty()
+
 st.markdown("---")
 # 분석 영역의 구조를 미리 정의 (ID 중복 에러 방지)
 analysis_header = st.empty()
 col_tbl, col_bar = st.columns([1.2, 1])
 tbl_view = col_tbl.empty()
 bar_view = col_bar.empty()
+
+# == 학습 진행 차트 영역 ==
+st.markdown("---")
+learning_header = st.empty()
+learning_chart_view = st.empty()
 
 def style_df(val):
     if isinstance(val, (int, float)):
@@ -90,12 +110,47 @@ if st.button("Run Evaluation"):
         np.random.seed(current_seed)
         st.toast(f"Trial {trial_idx + 1} Started (Seed: {current_seed}) - Run {run + 1}/{auto_runs}")
 
+        # == 사전 학습 단계 ==
+        if pretrain_episodes > 0:
+            st.toast(f"🧠 Pre-Training: {pretrain_episodes} episodes over historical data...")
+            train_range = min(episodes, len(env.data) - 21)
+            for pt_ep in range(pretrain_episodes):
+                for i in range(20, 20 + train_range):
+                    _, _, r_u, s_u, a_u = agent_raw.select_action(current_step=i)
+                    _, _, r_s, s_s, a_s = agent_static.select_action(current_step=i)
+                    
+                    next_step = min(i + 1, len(env.data) - 1)
+                    agent_raw.learn(s_u, a_u, r_u, next_step)
+                    agent_static.learn(s_s, a_s, r_s, next_step)
+                
+                # 사전 학습에서는 빠르게 탐험률 감소
+                agent_raw.decay_epsilon(pt_ep, pretrain_episodes)
+                agent_static.decay_epsilon(pt_ep, pretrain_episodes)
+            
+            # 사전 학습 후 탐험률 리셋 (본 실험에서 다시 탐험)
+            agent_raw.epsilon = eps * 0.5   # 절반으로 시작
+            agent_static.epsilon = eps * 0.5
+            st.toast(f"✅ Pre-Training Complete! Q-table initialized.")
+
         h_u, h_s, h_b, steps = [0], [0], [0], [0]
         log_data = []
+        eps_history = []
+        q_history_u = []
+        q_history_s = []
 
         for i in range(20, 20 + episodes):
-            ticker_u, _, r_u = agent_raw.select_action(current_step=i)
-            ticker_s, _, r_s = agent_static.select_action(current_step=i)
+            ticker_u, _, r_u, s_u, a_u = agent_raw.select_action(current_step=i)
+            ticker_s, _, r_s, s_s, a_s = agent_static.select_action(current_step=i)
+            
+            # Q-Learning 업데이트
+            next_step = min(i + 1, len(env.data) - 1)
+            agent_raw.learn(s_u, a_u, r_u, next_step)
+            agent_static.learn(s_s, a_s, r_s, next_step)
+            
+            # 탐험률 감소
+            episode_idx = i - 20
+            agent_raw.decay_epsilon(episode_idx, episodes)
+            agent_static.decay_epsilon(episode_idx, episodes)
             
             if 'SPY' in env.data.columns:
                 sc, sn = float(env.data['SPY'].iloc[i]), float(env.data['SPY'].iloc[i+1])
@@ -104,7 +159,18 @@ if st.button("Run Evaluation"):
                 
             h_u.append(h_u[-1] + r_u); h_s.append(h_s[-1] + r_s); h_b.append(h_b[-1] + r_b)
             current_day = i - 19; steps.append(current_day) 
-            log_data.append({"Day": current_day, "Vanilla Pick": ticker_u, "Vanilla Return(%)": r_u, "STATIC Pick (Ours)": ticker_s, "STATIC Return(%)": r_s})
+            log_data.append({
+                "Day": current_day, 
+                "Vanilla Pick": ticker_u, 
+                "Vanilla Return(%)": r_u, 
+                "STATIC Pick (Ours)": ticker_s, 
+                "STATIC Return(%)": r_s
+            })
+            
+            # 학습 진행 기록
+            eps_history.append(agent_static.epsilon)
+            q_history_u.append(agent_raw.get_avg_q())
+            q_history_s.append(agent_static.get_avg_q())
             
             fig_main.data[0].x = steps; fig_main.data[0].y = h_u
             fig_main.data[1].x = steps; fig_main.data[1].y = h_s
@@ -115,6 +181,12 @@ if st.button("Run Evaluation"):
             m_s.metric(label=f"STATIC Return - Bought: {ticker_s}", value=f"{h_s[-1]:.2f}%", delta=f"{r_s:.2f}%")
             m_b.metric(label="S&P 500 Index (SPY)", value=f"{h_b[-1]:.2f}%", delta=f"{r_b:.2f}%")
             
+            # 학습 지표 업데이트
+            m_winrate_u.metric(label="🎯 Vanilla Win Rate", value=f"{agent_raw.get_win_rate():.1f}%")
+            m_winrate_s.metric(label="🎯 STATIC Win Rate", value=f"{agent_static.get_win_rate():.1f}%")
+            m_avgq_u.metric(label="📈 Vanilla Avg |Q|", value=f"{agent_raw.get_avg_q():.4f}")
+            m_avgq_s.metric(label="📈 STATIC Avg |Q|", value=f"{agent_static.get_avg_q():.4f}")
+            
             if speed > 0:
                 time.sleep(speed)
 
@@ -123,20 +195,52 @@ if st.button("Run Evaluation"):
             "Seed": current_seed, 
             "Vanilla Final (%)": h_u[-1], 
             "STATIC Final (%)": h_s[-1], 
-            "SPY Final (%)": h_b[-1]
+            "SPY Final (%)": h_b[-1],
+            "Vanilla Win Rate (%)": agent_raw.get_win_rate(),
+            "STATIC Win Rate (%)": agent_static.get_win_rate()
         })
 
         analysis_header.markdown("#### Agent Decision Analysis")
         df_log = pd.DataFrame(log_data).set_index("Day")
         
-        # == [버그 해결 포인트] format 함수에 subset 파라미터 추가 ==
-        # 숫자형 컬럼에만 "{:.2f}" 포맷팅을 적용하여 ValueError를 방지합니다.
         styled_df = df_log.style.map(style_df).format("{:.2f}", subset=["Vanilla Return(%)", "STATIC Return(%)"])
         tbl_view.dataframe(styled_df, height=350, use_container_width=True)
         
         fig_bar = px.bar(df_log['STATIC Pick (Ours)'].value_counts().reset_index(), x='STATIC Pick (Ours)', y='count',
                          title="<b>Safe-Asset Selection Frequency</b>", color='count', color_continuous_scale='Blues')
         bar_view.plotly_chart(fig_bar.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', height=350), use_container_width=True)
+
+        # == 학습 진행 차트 (Q값 변화 & 탐험률 감소) ==
+        learning_header.markdown("#### 🧠 Q-Learning Progress")
+        fig_learn = make_subplots(
+            rows=1, cols=2,
+            subplot_titles=("<b>Average |Q| Value Over Time</b>", "<b>Exploration Rate (ε) Decay</b>")
+        )
+        
+        day_range = list(range(1, len(q_history_u) + 1))
+        fig_learn.add_trace(
+            go.Scatter(x=day_range, y=q_history_u, mode='lines', name='Vanilla Avg|Q|',
+                       line=dict(color='#e05050', width=2)), row=1, col=1
+        )
+        fig_learn.add_trace(
+            go.Scatter(x=day_range, y=q_history_s, mode='lines', name='STATIC Avg|Q|',
+                       line=dict(color='#4a90d9', width=2)), row=1, col=1
+        )
+        fig_learn.add_trace(
+            go.Scatter(x=day_range, y=eps_history, mode='lines', name='ε (epsilon)',
+                       line=dict(color='#f5a623', width=2)), row=1, col=2
+        )
+        
+        fig_learn.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+            height=350, margin=dict(t=60, b=40, l=40, r=40),
+            legend=dict(font=dict(size=13))
+        )
+        fig_learn.update_xaxes(title_text="<b>Trading Days</b>", row=1, col=1)
+        fig_learn.update_xaxes(title_text="<b>Trading Days</b>", row=1, col=2)
+        fig_learn.update_yaxes(title_text="<b>Avg |Q|</b>", row=1, col=1)
+        fig_learn.update_yaxes(title_text="<b>ε</b>", row=1, col=2)
+        learning_chart_view.plotly_chart(fig_learn, use_container_width=True)
 
 # == 📊 하단: 통계 분석 고도화 (누적 그래프 및 박스 플롯) ==
 if len(st.session_state.trial_history) > 0:
@@ -152,6 +256,12 @@ if len(st.session_state.trial_history) > 0:
     avg_spy = df_h['SPY Final (%)'].mean()
     
     st.success(f"시장 평균 대비 **Alpha 기대치(Expected Value)**: STATIC **{s_mean - avg_spy:.2f}%p** | Vanilla **{v_mean - avg_spy:.2f}%p**")
+    
+    # 승률 통계도 표시
+    if 'Vanilla Win Rate (%)' in df_h.columns:
+        avg_wr_v = df_h['Vanilla Win Rate (%)'].mean()
+        avg_wr_s = df_h['STATIC Win Rate (%)'].mean()
+        st.info(f"평균 **승률(Win Rate)**: STATIC **{avg_wr_s:.1f}%** | Vanilla **{avg_wr_v:.1f}%**")
 
     # == 회차별 누적 성과 추이 그래프 ==
     fig_trend = go.Figure()
@@ -212,6 +322,16 @@ if len(st.session_state.trial_history) > 0:
     
     with col_tbl_h:
         # 테이블 상단 요약 통계량 명시
+        win_rate_html = ""
+        if 'Vanilla Win Rate (%)' in df_h.columns:
+            avg_wr_v = df_h['Vanilla Win Rate (%)'].mean()
+            avg_wr_s = df_h['STATIC Win Rate (%)'].mean()
+            win_rate_html = f"""
+                <hr style='margin: 8px 0; border-color: rgba(128,128,128,0.3);'>
+                <li><b style='color:#e05050;'>Vanilla 승률:</b> {avg_wr_v:.1f}%</li>
+                <li><b style='color:#4a90d9;'>STATIC 승률:</b> {avg_wr_s:.1f}%</li>
+            """
+        
         st.markdown(f"""
         <div style='background-color: var(--secondary-background-color); padding: 15px; border-radius: 10px; border: 1px solid rgba(128,128,128,0.3); margin-bottom: 10px;'>
             <h4 style='margin-top:0px; color: var(--text-color); font-weight: 900;'> 통계 요약 (Expected & Risk)</h4>
@@ -221,8 +341,19 @@ if len(st.session_state.trial_history) > 0:
                 <hr style='margin: 8px 0; border-color: rgba(128,128,128,0.3);'>
                 <li><b style='color:#4a90d9;'>STATIC 평균(기대치):</b> {s_mean:.2f}% (σ={s_std:.2f}%)</li>
                 <li><b style='color:#4a90d9;'>STATIC 범위:</b> {s_min:.2f}% ~ {s_max:.2f}%</li>
+                {win_rate_html}
             </ul>
         </div>
         """, unsafe_allow_html=True)
         
-        st.dataframe(df_h.set_index("Trial").style.map(style_df).format({"Vanilla Final (%)": "{:.2f}", "STATIC Final (%)": "{:.2f}", "SPY Final (%)": "{:.2f}", "Seed": "{:.0f}"}), height=320, use_container_width=True)
+        format_dict = {
+            "Vanilla Final (%)": "{:.2f}", 
+            "STATIC Final (%)": "{:.2f}", 
+            "SPY Final (%)": "{:.2f}", 
+            "Seed": "{:.0f}"
+        }
+        if 'Vanilla Win Rate (%)' in df_h.columns:
+            format_dict["Vanilla Win Rate (%)"] = "{:.1f}"
+            format_dict["STATIC Win Rate (%)"] = "{:.1f}"
+        
+        st.dataframe(df_h.set_index("Trial").style.map(style_df).format(format_dict), height=320, use_container_width=True)
