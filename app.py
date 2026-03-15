@@ -26,7 +26,7 @@ st.markdown("## Test-Constrained-RL-ColdStart: S&P 500 Performance")
 st.sidebar.markdown("### System Parameters")
 env = SP500Environment()
 max_episodes = len(env.data) - 20 - 1 if len(env.data) > 20 else 100
-episodes = st.sidebar.slider("Episodes (Trading Days)", 10, max_episodes, min(100, max_episodes))
+episodes = st.sidebar.slider("Episodes (Trading Days)", 10, max_episodes, max_episodes)
 # [수정됨] Frame Speed 기본값 0.03, step 0.01 반영
 speed = st.sidebar.slider("Frame Speed (sec)", 0.0, 0.5, 0.03, step=0.01)
 
@@ -38,15 +38,15 @@ auto_runs = st.sidebar.number_input("Auto Run Count", min_value=1, value=1, step
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### RL Hyperparameters (Q-Learning)")
-lr = st.sidebar.slider("Learning Rate (α)", 0.001, 0.5, 0.01, step=0.001)
-# [수정됨] Gamma 기본값 0.98 반영
-gamma = st.sidebar.slider("Discount Factor (γ)", 0.50, 0.99, 0.98, step=0.01)
+lr = st.sidebar.slider("Learning Rate (α)", 0.001, 0.5, 0.005, step=0.001)
+# [수정됨] Gamma 최적값 0.85 반영
+gamma = st.sidebar.slider("Discount Factor (γ)", 0.50, 0.99, 0.85, step=0.01)
 eps = st.sidebar.slider("Exploration (ε)", 0.0, 1.0, 0.1, step=0.05)
 
 # == 사전 학습 에피소드 설정 ==
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Pre-Training")
-pretrain_episodes = st.sidebar.slider("Pre-Train Episodes", 0, 5, 2, step=1, help="본 실험 전 Q-테이블 사전 학습 횟수. 과거 데이터 전체를 반복 학습하여 초기 정책을 구축합니다.")
+pretrain_episodes = st.sidebar.slider("Pre-Train Episodes", 0, 5, 3, step=1, help="본 실험 전 Q-테이블 사전 학습 횟수. 과거 데이터 전체를 반복 학습하여 초기 정책을 구축합니다.")
 
 if 'trial_history' not in st.session_state:
     st.session_state.trial_history = []
@@ -256,6 +256,16 @@ if len(st.session_state.trial_history) > 0:
     avg_spy = df_h['SPY Final (%)'].mean()
     
     st.success(f"시장 평균 대비 **Alpha 기대치(Expected Value)**: STATIC **{s_mean - avg_spy:.2f}%p** | Vanilla **{v_mean - avg_spy:.2f}%p**")
+    
+    # == [NEW] 결과 내보내기 버튼 ==
+    csv = df_h.to_csv(index=False).encode('utf-8-sig')
+    st.download_button(
+        label="📥 Download Trial History (CSV)",
+        data=csv,
+        file_name='rl_trading_history.csv',
+        mime='text/csv',
+    )
+
     
     # 승률 통계도 표시
     if 'Vanilla Win Rate (%)' in df_h.columns:

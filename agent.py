@@ -3,6 +3,9 @@ import pandas as pd
 import yfinance as yf
 import streamlit as st
 import config
+from collections import deque
+import random
+
 
 class SP500Environment:
     """ S&P 500 대표 종목 및 벤치마크(SPY) 데이터를 관리하는 환경 """
@@ -46,20 +49,24 @@ class SP500Environment:
         self.volatility = returns.rolling(window=20).std()
         # 변동성의 5일 변화 (추세)
         self.vol_trend = self.volatility.diff(5)
+        
+        # 모멘텀: 5일 전 가격보다 현재 가격이 높은지 여부
+        self.momentum_5d = prices > prices.shift(5)
+
 
     def get_state(self, step, ticker_idx):
         """
         주어진 시점과 종목에 대해 이산화된 상태(state index)를 반환합니다.
         
-        상태 구성 (총 12가지):
+        상태 구성 (총 24가지):
         - 가격 vs SMA20: 위(1) / 아래(0) → 2가지
         - RSI 구간: 과매도 <30(0) / 중립 30~70(1) / 과매수 >70(2) → 3가지
         - 변동성 추세: 하락(0) / 상승(1) → 2가지
-        → 2 × 3 × 2 = 12 상태
+        - 5일 모멘텀: 상승(1) / 하락(0) → 2가지 (NEW)
+        → 2 × 3 × 2 × 2 = 24 상태
         """
         ticker = self.tickers[ticker_idx]
         
-        # 데이터가 충분하지 않으면 기본 상태 반환
         if step < 20:
             return 0
         
@@ -67,21 +74,25 @@ class SP500Environment:
         sma = float(self.sma20[ticker].iloc[step])
         rsi = float(self.rsi[ticker].iloc[step])
         vol_t = float(self.vol_trend[ticker].iloc[step]) if not np.isnan(self.vol_trend[ticker].iloc[step]) else 0.0
+        mom = 1 if self.momentum_5d[ticker].iloc[step] else 0
         
         # 이산화
-        sma_state = 1 if price >= sma else 0        # 0 or 1
+        sma_state = 1 if price >= sma else 0
         
         if rsi < 30:
-            rsi_state = 0   # 과매도
+            rsi_state = 0
         elif rsi > 70:
-            rsi_state = 2   # 과매수
+            rsi_state = 2
         else:
-            rsi_state = 1   # 중립
+            rsi_state = 1
         
-        vol_state = 1 if vol_t > 0 else 0            # 0 or 1
+        vol_state = 1 if vol_t > 0 else 0
         
-        state = sma_state * 6 + rsi_state * 2 + vol_state
+        # 상태 결합 (24진수/가중치 방식)
+        # mom_state(2) * 12 + sma_state(2) * 6 + rsi_state(3) * 2 + vol_state(2)
+        state = (mom * 12) + (sma_state * 6) + (rsi_state * 2) + vol_state
         return state
+
 
 
 class StaticConstraintEngine:
@@ -139,7 +150,7 @@ class RecommendationAgent:
     Q-Learning 기반 강화학습 에이전트.
     기술적 지표 기반 상태에서 최적의 행동(종목 선택)을 학습합니다.
     """
-    NUM_STATES = 12  # 2(SMA) × 3(RSI) × 2(변동성)
+    NUM_STATES = 24  # 2(MOM) × 2(SMA) × 3(RSI) × 2(VOL)
     
     def __init__(self, env, use_constraints=True, lr=0.01, gamma=0.98, eps=0.1):
         self.env = env
@@ -150,18 +161,22 @@ class RecommendationAgent:
         self.epsilon = eps
         self.initial_epsilon = eps
         
-        # Q-테이블 초기화: (num_states, num_actions)
-        # 작은 랜덤 값으로 초기화하여 초기 탐험 촉진
+        # Q-테이블 초기화
         self.q_table = np.random.uniform(
             low=-0.01, high=0.01, 
             size=(self.NUM_STATES, env.num_actions)
         )
+        
+        # Experience Replay Buffer
+        self.memory = deque(maxlen=2000)
+        self.batch_size = 32
         
         # 학습 기록
         self.episode_rewards = []
         self.q_value_history = []
         self.win_count = 0
         self.total_count = 0
+
         
     def _get_global_state(self, current_step):
         """
@@ -212,8 +227,18 @@ class RecommendationAgent:
             chosen_ticker = self.env.tickers[chosen_action]
             current_price = float(self.env.data[chosen_ticker].iloc[current_step])
             next_price = float(self.env.data[chosen_ticker].iloc[current_step + 1])
-            reward = ((next_price - current_price) / current_price) * 100 if current_price > 0 else 0.0
+            
+            # 기본 수익률 (%)
+            raw_return = ((next_price - current_price) / current_price) * 100 if current_price > 0 else 0.0
+            
+            # [전문가 고도화] Volatility Penalty (위험 조정 보상)
+            # 변동성이 높을수록 보상을 깎아 안정적인 종목을 선호하게 함
+            vol = float(self.env.volatility[chosen_ticker].iloc[current_step]) if not np.isnan(self.env.volatility[chosen_ticker].iloc[current_step]) else 0.0
+            penalty_factor = 0.1
+            reward = raw_return - (vol * 100 * penalty_factor)
+            
             is_valid = engine.valid_mask[chosen_action]
+
         else:
             reward = 0.0
             chosen_ticker = self.env.tickers[chosen_action] if chosen_action < self.env.vocab_size else "HOLD"
@@ -228,28 +253,36 @@ class RecommendationAgent:
     
     def learn(self, state, action, reward, next_step):
         """
-        Q-Learning 업데이트:
-        Q(s,a) ← Q(s,a) + α * [r + γ * max Q(s',a') - Q(s,a)]
+        경험을 메모리에 저장하고 Replay Buffer로부터 학습합니다.
         """
         next_state = self._get_global_state(next_step)
         
-        # 제약 조건 적용 시 다음 상태에서의 최대 Q값도 마스킹
-        if self.use_constraints:
-            engine = StaticConstraintEngine(self.env, next_step)
-            next_q = engine.apply_mask(self.q_table[next_state].copy())
-            valid_next = next_q[next_q > -np.inf]
-            max_next_q = float(np.max(valid_next)) if len(valid_next) > 0 else 0.0
-        else:
-            max_next_q = float(np.max(self.q_table[next_state]))
+        # 1. 경험 저장
+        self.memory.append((state, action, reward, next_state, next_step))
         
-        # TD 업데이트
-        td_target = reward + self.gamma * max_next_q
-        td_error = td_target - self.q_table[state, action]
-        self.q_table[state, action] += self.lr * td_error
+        # 2. Replay 학습 (배치 크기만큼 무작위 샘플링)
+        if len(self.memory) >= self.batch_size:
+            minibatch = random.sample(self.memory, self.batch_size)
+            for m_state, m_action, m_reward, m_next_state, m_next_step in minibatch:
+                
+                # 다음 상태에서의 최대 Q값 계산 (제약 조건 고려)
+                if self.use_constraints:
+                    engine = StaticConstraintEngine(self.env, m_next_step)
+                    next_q = engine.apply_mask(self.q_table[m_next_state].copy())
+                    valid_next = next_q[next_q > -np.inf]
+                    max_next_q = float(np.max(valid_next)) if len(valid_next) > 0 else 0.0
+                else:
+                    max_next_q = float(np.max(self.q_table[m_next_state]))
+                
+                # TD 업데이트
+                td_target = m_reward + self.gamma * max_next_q
+                td_error = td_target - self.q_table[m_state, m_action]
+                self.q_table[m_state, m_action] += self.lr * td_error
         
-        # Q값 히스토리 기록
+        # 히스토리 기록
         self.q_value_history.append(float(np.mean(np.abs(self.q_table))))
         self.episode_rewards.append(reward)
+
     
     def decay_epsilon(self, episode, total_episodes):
         """
