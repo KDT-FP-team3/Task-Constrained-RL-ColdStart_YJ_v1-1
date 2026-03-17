@@ -44,3 +44,5 @@ logs/
 memo.txt
 
 /Captures
+
+.gitignore

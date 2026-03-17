@@ -16,10 +16,12 @@ Tabular Q-Learning의 **행동 공간을 종목 단위로 확장**하여 종목 
 
 ```
 .
-├── app.py        # Streamlit UI — 실행 진입점
-├── agent.py      # 환경(SP500Environment) + 제약 엔진 + Q-에이전트
-├── config.py     # 하이퍼파라미터 및 금융 상수 중앙 관리
-└── README.md
+├── .devcontainer/  # 개발 컨테이너 설정 (Codespaces 등)
+├── app.py          # Streamlit UI — 실행 진입점
+├── agent.py        # 환경(SP500Environment) + 제약 엔진 + Q-에이전트
+├── config.py       # 하이퍼파라미터 및 금융 상수 중앙 관리
+├── requirements.txt # 파이썬 패키지 의존성 관리
+└── README.md       # 프로젝트 문서
 ```
 
 ---
